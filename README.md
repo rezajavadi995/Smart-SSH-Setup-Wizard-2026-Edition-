@@ -58,6 +58,19 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/rezajavadi995/Smart-SSH-
 - Detects active network interface
 - Instantly shows **ready-to-copy SSH connection examples**
 
+
+
+---
+
+### 🛡️ Tailscale Integration | اتصال امن با Tailscale
+- Optional automatic setup of **Tailscale VPN**
+- Enables secure SSH access **without port forwarding**
+- Works seamlessly behind NAT, CGNAT, or dynamic IPs
+
+- راه‌اندازی اختیاری و خودکار Tailscale
+- اتصال امن SSH بدون نیاز به باز کردن پورت
+- قابل استفاده پشت NAT، CGNAT و آی‌پی داینامیک
+
 - شناسایی خودکار آی‌پی سیستم
 - تشخیص اینترفیس فعال شبکه
 - نمایش دستور اتصال SSH آماده‌ی کپی
