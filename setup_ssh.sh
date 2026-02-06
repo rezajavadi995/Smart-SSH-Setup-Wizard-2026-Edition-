@@ -124,16 +124,28 @@ prepare_ssh() {
     echo -e "${GREEN}${MSG_SSH_READY}${NC}"
 }
 
-# نصب و کانفیگ Tailscale
+# نصب و کانفیگ Tailscale (بهینه‌سازی شده برای ایرانسل و 2026)
+
 setup_tailscale() {
+    sudo rm -f /etc/apt/sources.list.d/tailscale.list > /dev/null 2>&1
+
     if ! command -v tailscale >/dev/null 2>&1; then
         echo -e "${CYAN}${MSG_TS_INSTALL}${NC}"
         curl -fsSL https://tailscale.com/install.sh | sh > /dev/null 2>&1
     fi
 
     echo -e "${YELLOW}${MSG_TS_AUTH}${NC}"
-    sudo tailscale up
     
+    # اجرای دستور در پس‌زمینه برای لحظه‌ای، تا اینترفیس ساخته شود و MTU را سریع کم کنیم
+    sudo tailscale up --reset --force-reauth & 
+    sleep 2
+    
+    # تلاش مکرر برای تنظیم MTU به محض ساخته شدن اینترفیس
+    sudo ip link set dev tailscale0 mtu 1280 > /dev/null 2>&1
+    
+    # حالا صبر می‌کنیم تا کاربر مرحله لاگین را تمام کند
+    wait $! 2>/dev/null || sudo tailscale up --reset
+
     echo -e "${GREEN}${MSG_TS_DONE}${NC}"
     
     ts_ip=$(tailscale ip -4)
@@ -157,7 +169,7 @@ print_result() {
     echo -e "${GREEN}==========================================${NC}"
     echo -e "${BLUE}${MSG_INFO_HEAD}${NC}"
     
-    # استفاده از printf برای جلوگیری از بهم ریختن کادرها در نام‌های طولانی
+    # استفاده از printf برای تراز شدن خروجی بصری
     printf "${MSG_IP} ${YELLOW}%s${NC}\n" "$final_ip"
     printf "${MSG_USER} ${YELLOW}%s${NC}\n" "$user"
     printf "${MSG_PORT} ${YELLOW}%s${NC}\n" "22"
