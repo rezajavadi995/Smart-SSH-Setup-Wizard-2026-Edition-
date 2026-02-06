@@ -1,5 +1,8 @@
 #!/bin/bash
 
+export LC_ALL=C
+export LANG=en_US.UTF-8
+
 # --- رنگ‌ها و استایل ---
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -27,7 +30,7 @@ if [[ "$LANG" == "FA" ]]; then
     MSG_BANNER="    SSH Automated Setup Wizard (2026)     "
     MSG_CONFIRM="[?] آیا از انجام این مرحله مطمئن هستید؟ (y/n): "
     MSG_CANCEL="[!] عملیات توسط کاربر لغو شد."
-    MSG_UPDATING="[*] در حال آپدیت مخازن و نصب SSH..."
+    MSG_UPDATING="[*] در حال آپدیت مخازن و نصب SSH (لطفا کمی صبر کنید)..."
     MSG_SSH_READY="[+] سرویس SSH آماده و فعال شد."
     MSG_SUCCESS="      تنظیمات با موفقیت انجام شد!"
     MSG_INFO_HEAD="اطلاعات جهت اتصال (Local/Tailscale):"
@@ -35,6 +38,7 @@ if [[ "$LANG" == "FA" ]]; then
     MSG_USER="👤 نام کاربری: "
     MSG_PORT="🔑 پورت:      "
     MSG_EXAMPLE="نمونه دستور جهت کپی:"
+    MSG_SHORTCUT="[+] میانبر ایجاد شد! از این پس با دستور 'setupssh' در هر جا وارد شوید."
     # منوها
     MSG_MENU_1="1) ساخت کاربر جدید و تنظیم SSH"
     MSG_MENU_2="2) استفاده از یوزر فعلی ($USER) و تنظیم SSH"
@@ -55,7 +59,7 @@ else
     MSG_BANNER="    SSH Automated Setup Wizard (2026)     "
     MSG_CONFIRM="[?] Are you sure you want to proceed? (y/n): "
     MSG_CANCEL="[!] Operation cancelled by user."
-    MSG_UPDATING="[*] Updating repositories and installing SSH..."
+    MSG_UPDATING="[*] Updating repositories and installing SSH (Please wait)..."
     MSG_SSH_READY="[+] SSH service is ready and enabled."
     MSG_SUCCESS="      Setup Completed Successfully!"
     MSG_INFO_HEAD="Connection Info (Local/Tailscale):"
@@ -63,6 +67,7 @@ else
     MSG_USER="👤 Username:   "
     MSG_PORT="🔑 Port:       "
     MSG_EXAMPLE="Example command to copy:"
+    MSG_SHORTCUT="[+] Shortcut created! Use 'setupssh' command from anywhere."
     # Menus
     MSG_MENU_1="1) Create new user and setup SSH"
     MSG_MENU_2="2) Use current user ($USER) and setup SSH"
@@ -81,6 +86,17 @@ else
     MSG_TS_DONE="[+] Tailscale connected successfully."
 fi
 
+# ایجاد میانبر (Symlink) برای اجرای سریع
+create_shortcut() {
+    local script_path=$(readlink -f "$0")
+    if [[ ! -f "/usr/local/bin/setupssh" ]]; then
+        sudo ln -sf "$script_path" /usr/local/bin/setupssh > /dev/null 2>&1
+        sudo chmod +x /usr/local/bin/setupssh > /dev/null 2>&1
+        echo -e "${CYAN}${MSG_SHORTCUT}${NC}"
+        sleep 2
+    fi
+}
+
 # نمایش بنر
 show_banner() {
     clear
@@ -89,47 +105,42 @@ show_banner() {
     echo -e "${BLUE}==========================================${NC}"
 }
 
-# تاییدیه قبل از انجام هر مرحله (برگشت‌پذیر)
+# تاییدیه قبل از انجام هر مرحله
 confirm() {
     echo -ne "${YELLOW}${MSG_CONFIRM}${NC}"
     read -r opt
     [[ "$opt" =~ ^[yY]$ ]] || return 1
 }
 
-# نصب و کانفیگ SSH
+# نصب و کانفیگ SSH (هوشمند و بدون پیام‌های ترسناک)
 prepare_ssh() {
     echo -e "${BLUE}${MSG_UPDATING}${NC}"
-    sudo apt update -y && sudo apt install -y openssh-server curl
-    sudo systemctl enable --now ssh
+    # چک کردن نصب بودن (برای جلوگیری از آپدیت بی مورد)
+    if ! command -v sshd >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+        sudo apt update -y > /dev/null 2>&1
+        sudo apt install -y openssh-server curl > /dev/null 2>&1
+    fi
+    sudo systemctl enable --now ssh > /dev/null 2>&1
     echo -e "${GREEN}${MSG_SSH_READY}${NC}"
 }
 
-# نصب و کانفیگ Tailscale (فقط در صورت انتخاب اجرا می‌شود)
+# نصب و کانفیگ Tailscale
 setup_tailscale() {
-    # چک کردن curl برای دانلود اسکریپت
-    command -v curl >/dev/null 2>&1 || sudo apt install -y curl
-
-    # چک کردن اینکه آیا از قبل نصب است یا خیر
     if ! command -v tailscale >/dev/null 2>&1; then
         echo -e "${CYAN}${MSG_TS_INSTALL}${NC}"
-        curl -fsSL https://tailscale.com/install.sh | sh
+        curl -fsSL https://tailscale.com/install.sh | sh > /dev/null 2>&1
     fi
 
-    # دستور احراز هویت
     echo -e "${YELLOW}${MSG_TS_AUTH}${NC}"
     sudo tailscale up
     
     echo -e "${GREEN}${MSG_TS_DONE}${NC}"
     
-    # گرفتن آی‌پی مخصوص Tailscale
     ts_ip=$(tailscale ip -4)
-    
-    # نمایش نتیجه با یوزر فعلی و آی‌پی جدید
     print_result "$USER" "$ts_ip"
 }
 
-# چاپ خروجی نهایی کاربرپسند
-# پارامتر دوم (ip) اختیاری است. اگر نباشد، آی‌پی لوکال استفاده می‌شود.
+# چاپ خروجی نهایی (ادغام با ساختار شما + تراز بصری)
 print_result() {
     local user=$1
     local custom_ip=$2
@@ -145,14 +156,20 @@ print_result() {
     echo -e "${GREEN}${MSG_SUCCESS}${NC}"
     echo -e "${GREEN}==========================================${NC}"
     echo -e "${BLUE}${MSG_INFO_HEAD}${NC}"
-    echo -e "${MSG_IP} ${YELLOW}$final_ip${NC}"
-    echo -e "${MSG_USER} ${YELLOW}$user${NC}"
-    echo -e "${MSG_PORT} ${YELLOW}22${NC}"
+    
+    # استفاده از printf برای جلوگیری از بهم ریختن کادرها در نام‌های طولانی
+    printf "${MSG_IP} ${YELLOW}%s${NC}\n" "$final_ip"
+    printf "${MSG_USER} ${YELLOW}%s${NC}\n" "$user"
+    printf "${MSG_PORT} ${YELLOW}%s${NC}\n" "22"
+    
     echo -e "------------------------------------------"
     echo -e "${BLUE}${MSG_EXAMPLE}${NC}"
-    echo -e "ssh $user@$final_ip"
+    echo -e "${YELLOW}ssh $user@$final_ip${NC}"
     echo -e "${GREEN}==========================================${NC}"
 }
+
+# اجرای میانبر در شروع
+create_shortcut
 
 # منوی اصلی
 while true; do
@@ -176,11 +193,11 @@ while true; do
             read -rs password; echo
             
             if confirm; then
-                sudo useradd -m -s /bin/bash "$username"
+                sudo useradd -m -s /bin/bash "$username" > /dev/null 2>&1
                 echo "$username:$password" | sudo chpasswd
                 echo -ne "${MSG_ASK_SUDO}"
                 read -r is_admin
-                [[ "$is_admin" =~ ^[yY]$ ]] && sudo usermod -aG sudo "$username"
+                [[ "$is_admin" =~ ^[yY]$ ]] && sudo usermod -aG sudo "$username" > /dev/null 2>&1
                 
                 prepare_ssh
                 print_result "$username"
@@ -201,7 +218,6 @@ while true; do
             fi
             ;;
         3)
-            # فقط اینجا Tailscale صدا زده می‌شود
             if confirm; then
                 setup_tailscale
                 break
@@ -214,4 +230,3 @@ while true; do
         *) echo -e "${RED}${MSG_INVALID}${NC}"; sleep 1 ;;
     esac
 done
-
