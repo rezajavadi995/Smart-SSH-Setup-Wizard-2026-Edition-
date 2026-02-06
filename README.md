@@ -1,0 +1,1 @@
+# Smart-SSH-Setup-Wizard-2026-Edition-
